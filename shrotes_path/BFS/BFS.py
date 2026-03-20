@@ -17,7 +17,7 @@ def bfs(grid, start, goal, ROWS, COLS):
 
         for nx, ny in neighbors:
             if 0 <= nx < ROWS and 0 <= ny < COLS:
-                if grid[nx][ny] == 1 and (nx, ny) not in visited:
+                if grid[nx][ny] != 0 and (nx, ny) not in visited:
                     queue.append((nx, ny))
                     visited.add((nx, ny))
                     parent[(nx, ny)] = current

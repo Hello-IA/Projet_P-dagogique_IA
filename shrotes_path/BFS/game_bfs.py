@@ -1,7 +1,8 @@
 import pygame
 import sys
 from BFS import *
-
+from Dijkstra import * 
+from A_star import *
 # ===== PARAMETRES =====
 CELL_SIZE = 15
 ROWS, COLS = 40, 40
@@ -46,6 +47,21 @@ def get_cell_from_mouse(pos):
     y = pos[0] // CELL_SIZE
     return x, y
 
+# ===== TERRAINS =====
+terrains = [
+    {"name":"Facile", "cost":1, "color":(20,120,255)},   # bleu
+    {"name":"Moyen",  "cost":3, "color":(180,140,50)},   # brun
+    {"name":"Difficile","cost":5,"color":(120,30,30)},   # rouge
+]
+terrain_actif = terrains[0]
+
+def check_click_terrain(pos):
+    for i, t in enumerate(terrains):
+        rect = pygame.Rect(10 + i*60, 10, 50, 30)
+        if rect.collidepoint(pos):
+            return t
+    return None
+
 # ===== LOOP =====
 running = True
 while running:
@@ -59,13 +75,17 @@ while running:
         if mode == "edit":
             if pygame.mouse.get_pressed()[0]:  # clic gauche
                 x, y = get_cell_from_mouse(pygame.mouse.get_pos())
-                if 0 <= x < ROWS and 0 <= y < COLS:
+                selection = check_click_terrain(event.pos)
+                if selection:
+                    terrain_actif = selection
+                elif 0 <= x < ROWS and 0 <= y < COLS:
                     grid[x][y] = 0  # mur
 
             if pygame.mouse.get_pressed()[2]:  # clic droit
                 x, y = get_cell_from_mouse(pygame.mouse.get_pos())
                 if 0 <= x < ROWS and 0 <= y < COLS:
-                    grid[x][y] = 1  # enlever mur
+                    grid[x][y] = terrain_actif["cost"]  # enlever mur
+                    
 
         # ===== CLAVIER =====
         if event.type == pygame.KEYDOWN:
@@ -81,7 +101,7 @@ while running:
                 # lancer BFS
                 mode = "run"
                 reset_visual()
-                bfs_gen = bfs(grid, start, goal, ROWS, COLS)
+                bfs_gen = A_star(grid, start, goal, ROWS, COLS)
 
             if event.key == pygame.K_r:
                 mode = "edit"
@@ -97,6 +117,7 @@ while running:
                     brightness[node] = 0.3
 
                 elif action == "path":
+
                     path_cells.add(node)
 
             except StopIteration:
@@ -108,15 +129,17 @@ while running:
     for x in range(ROWS):
         for y in range(COLS):
             rect = pygame.Rect(y*CELL_SIZE, x*CELL_SIZE, CELL_SIZE, CELL_SIZE)
-
+            val = grid[x][y]
             if grid[x][y] == 0:
                 pygame.draw.rect(screen, (0,0,0), rect)
             else:
+                base_color = next(t["color"] for t in terrains if t["cost"]==val)
                 b = brightness[(x,y)]
+                
                 color = (
-                    int(20 + (120-20)*b),
-                    int(20 + (180-20)*b),
-                    int(60 + (255-60)*b),
+                    int(base_color[0]*b + (base_color[0]//2)*(1-b)),
+                    int(base_color[1]*b + (base_color[1]//2)*(1-b)),
+                    int(base_color[2]*b + (base_color[2]//2)*(1-b)),
                 )
                 pygame.draw.rect(screen, color, rect)
 
@@ -132,6 +155,13 @@ while running:
         pygame.draw.rect(screen, (255,0,0),
             (goal[1]*CELL_SIZE, goal[0]*CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
+
+    # ===== Panneau terrain =====
+    for i, t in enumerate(terrains):
+        rect = pygame.Rect(10 + i*60, 10, 50, 30)
+        pygame.draw.rect(screen, t["color"], rect)
+        if t == terrain_actif:
+            pygame.draw.rect(screen, (255,255,255), rect, 3)  # bordure blanche si actif
     # ===== TEXTE =====
     legend = [
         "Clic gauche = mur",
