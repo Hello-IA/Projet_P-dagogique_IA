@@ -5,12 +5,12 @@ def bfs(grid, start, goal, ROWS, COLS):
     queue = deque([start])
     visited = set([start])
     parent = {}
-
-    while queue:
+    enter = True
+    while enter and queue:
         current = queue.popleft()
-
+        
         if current == goal:
-            break
+            enter = False
 
         x, y = current
         neighbors = [(x+1,y),(x-1,y),(x,y+1),(x,y-1)]
