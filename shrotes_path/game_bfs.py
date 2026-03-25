@@ -3,8 +3,9 @@ import sys
 from BFS import *
 from Dijkstra import * 
 from A_star import *
+import math
 # ===== PARAMETRES =====
-CELL_SIZE = 15
+CELL_SIZE = 16
 ROWS, COLS = 40, 40
 
 WIDTH = COLS * CELL_SIZE
@@ -22,25 +23,62 @@ pygame.display.set_caption("Éditeur BFS/Dijkstra/A*")
 
 font = pygame.font.SysFont(None, 24)
 
-sprite_eau = pygame.image.load("Tiles\\wather.png").convert_alpha()
+TILE_SIZE = 16
 
-# redimensionner à la taille d'une cellule
-sprite_eau = pygame.transform.scale(sprite_eau, (CELL_SIZE, CELL_SIZE))
+sprite_maptiles = pygame.image.load("Tiles\\maptiles.png").convert_alpha()
 
-sprite_grass = pygame.image.load("Tiles\\grass.png").convert_alpha()
+# Dimensions de l'image
+width, height = sprite_maptiles.get_size()
 
-# redimensionner à la taille d'une cellule
-sprite_grass = pygame.transform.scale(sprite_grass, (CELL_SIZE, CELL_SIZE))
+tiles = []
 
-sprite_montaine = pygame.image.load("Tiles\\montaine.png").convert_alpha()
+for y in range(0, height, TILE_SIZE):
+    row = []
+    for x in range(0, width, TILE_SIZE):
+        rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
+        tile = sprite_maptiles.subsurface(rect)
+        row.append(tile)
+    tiles.append(row)
+    
+rect = pygame.Rect(64, 80, 48, 48)
+grass = sprite_maptiles.subsurface(rect) 
 
-# redimensionner à la taille d'une cellule
-sprite_montaine = pygame.transform.scale(sprite_montaine, (CELL_SIZE, CELL_SIZE))
+rect = pygame.Rect(64, 144, 48, 48)
+montaine = sprite_maptiles.subsurface(rect) 
 
-sprite_snow = pygame.image.load("Tiles\\snow.png").convert_alpha()
+rect = pygame.Rect(128, 0, 48, 48)
+snow = sprite_maptiles.subsurface(rect)    
 
-# redimensionner à la taille d'une cellule
-sprite_snow = pygame.transform.scale(sprite_snow, (CELL_SIZE, CELL_SIZE))
+TILE_SIZE_UNIT = 32
+
+sprite_units = pygame.image.load("Tiles\\units.png").convert_alpha()
+
+# Dimensions de l'image
+width, height = sprite_units.get_size()
+
+units = []
+
+for y in range(0, height, TILE_SIZE_UNIT):
+    row = []
+    for x in range(0, width, TILE_SIZE_UNIT):
+        rect = pygame.Rect(x, y, TILE_SIZE_UNIT, TILE_SIZE_UNIT)
+        unit = sprite_units.subsurface(rect)
+        row.append(unit)
+    units.append(row)
+
+player_BFS = units[0][3]
+player_BFS = pygame.transform.scale(player_BFS, (CELL_SIZE, CELL_SIZE))
+
+sprite_castle = pygame.image.load("Tiles\\lilcastle.png").convert_alpha()
+
+rect = pygame.Rect(0, 0, 32, 32)
+castle = sprite_castle.subsurface(rect)
+castle = pygame.transform.scale(castle, (CELL_SIZE, CELL_SIZE))
+
+sprite_way = pygame.image.load("Tiles\\way.png").convert_alpha()
+way = pygame.transform.scale(sprite_way, (CELL_SIZE, CELL_SIZE))
+
+
 
 # ===== ETAT =====
 grid = [[1 for _ in range(COLS)] for _ in range(ROWS)]
@@ -52,11 +90,14 @@ mode = "edit"  # "edit" ou "run"
 
 brightness = {}
 path_cells = set()
-
+path_parent = {}
+parent = None
 # init brightness
 def reset_visual():
     brightness.clear()
     path_cells.clear()
+    path_parent.clear()
+    parent = None
     for x in range(ROWS):
         for y in range(COLS):
             brightness[(x,y)] = 0.0
@@ -75,19 +116,84 @@ def get_cell_from_mouse(pos):
 
 # ===== TERRAINS =====
 terrains = [
-    {"name":"Facile", "cost":1, "sprite":sprite_grass},   # bleu
-    {"name":"Moyen",  "cost":3, "sprite":sprite_montaine},   # brun
-    {"name":"Difficile","cost":5,"sprite":sprite_snow},   # rouge
+    {"name":"Grass", "cost":1, "sprite":grass},   # bleu
+    {"name":"Montaine",  "cost":3, "sprite":montaine},   # brun
+    {"name":"snow","cost":5,"sprite":snow},   # rouge
 ]
 terrain_actif = terrains[0]
 
 def check_click_terrain(pos):
     for i, t in enumerate(terrains):
-        rect = pygame.Rect(10 + i*60, 10, 50, 30)
+        rect = pygame.Rect(10 + i*60, 10, 48, 48)
         if rect.collidepoint(pos):
             return t
     return None
 
+def generate_tiles(x, y, center, tl, bl, tr, br):
+    voisin_8 = []
+    for i in range(-1, 2):
+        voisin = []
+        for j in range(-1, 2):
+            if 0 <= x+i < ROWS and 0 <= y+j < COLS:
+                val_voisin = grid[x+i][y+j]
+            else:
+                val_voisin = math.inf
+            voisin.append(val_voisin)
+        voisin_8.append(voisin)
+    tile = pygame.Surface((16, 16), pygame.SRCALPHA)
+    
+    tl_small, tr_small, bl_small, br_small = None, None, None, None
+    val = grid[x][y]
+    size = 8
+    tl_small = pygame.transform.scale(tiles[center[0]][center[1]], (size, size))
+    tr_small = pygame.transform.scale(tiles[center[0]][center[1]], (size, size))
+    bl_small = pygame.transform.scale(tiles[center[0]][center[1]], (size, size))
+    br_small = pygame.transform.scale(tiles[center[0]][center[1]], (size, size))
+    #le coint en au a gauche
+    if voisin_8[1][0] != val and voisin_8[0][1] != val:
+        tl_small = pygame.transform.scale(tiles[tl[0][0]][tl[0][1]], (size, size))
+    elif voisin_8[1][0] == val and voisin_8[0][1] == val and voisin_8[0][0] != val:
+        tl_small = pygame.transform.scale(tiles[tl[1][0]][tl[1][1]], (size, size))
+    elif voisin_8[1][0] != val and voisin_8[0][1] == val:
+        tl_small = pygame.transform.scale(tiles[tl[2][0]][tl[2][1]], (size, size))
+    elif voisin_8[1][0] == val and voisin_8[0][1] != val:
+        tl_small = pygame.transform.scale(tiles[tl[3][0]][tl[3][1]], (size, size))
+        
+    #le coins en bas a gauche
+    if voisin_8[1][0] != val and voisin_8[2][1] != val:
+        bl_small = pygame.transform.scale(tiles[bl[0][0]][bl[0][1]], (size, size))
+    elif voisin_8[1][0] == val and voisin_8[2][1] == val and voisin_8[2][0] != val:
+        bl_small = pygame.transform.scale(tiles[bl[1][0]][bl[1][1]], (size, size))
+    elif voisin_8[1][0] != val and voisin_8[2][1] == val:
+        bl_small = pygame.transform.scale(tiles[bl[2][0]][bl[2][1]], (size, size))
+    elif voisin_8[1][0] == val and voisin_8[2][1] != val:
+        bl_small = pygame.transform.scale(tiles[bl[3][0]][bl[3][1]], (size, size))
+        
+    #le coint en hau a droite
+    if voisin_8[1][2] != val and voisin_8[0][1] != val:
+        tr_small = pygame.transform.scale(tiles[tr[0][0]][tr[0][1]], (size, size))
+    elif voisin_8[1][2] == val and voisin_8[0][1] == val and voisin_8[0][2] != val:
+        tr_small = pygame.transform.scale(tiles[tr[1][0]][tr[1][1]], (size, size))
+    elif voisin_8[1][2] != val and voisin_8[0][1] == val:
+        tr_small = pygame.transform.scale(tiles[tr[2][0]][tr[2][1]], (size, size))
+    elif voisin_8[1][2] == val and voisin_8[0][1] != val:
+        tr_small = pygame.transform.scale(tiles[tr[3][0]][tr[3][1]], (size, size))
+    
+    #le coint en bas a droite
+    if voisin_8[1][2] != val and voisin_8[2][1] != val:
+        br_small = pygame.transform.scale(tiles[br[0][0]][br[0][1]], (size, size))
+    elif voisin_8[1][2] == val and voisin_8[2][1] == val and voisin_8[2][2] != val:
+        br_small = pygame.transform.scale(tiles[br[1][0]][br[1][1]], (size, size))
+    elif voisin_8[1][2] != val and voisin_8[2][1] == val:
+        br_small = pygame.transform.scale(tiles[br[2][0]][br[2][1]], (size, size))
+    elif voisin_8[1][2] == val and voisin_8[2][1] != val:
+        br_small = pygame.transform.scale(tiles[br[3][0]][br[3][1]], (size, size))
+        
+    tile.blit(tl_small, (0, 0))
+    tile.blit(tr_small, (8, 0))
+    tile.blit(bl_small, (0, 8))
+    tile.blit(br_small, (8, 8))
+    return tile
 
 def check_click_algo(pos):
     buttons = ["BFS", "DIJKSTRA", "ASTAR"]
@@ -154,7 +260,7 @@ while running:
             if event.key == pygame.K_r:
                 mode = "edit"
                 reset_visual()
-
+    
     # ===== BFS =====
     if mode == "run" and bfs_gen:
         for _ in range(20):
@@ -166,6 +272,8 @@ while running:
 
                 elif action == "path":
                     path_cells.add(node)
+                    path_parent[node] = parent
+                    parent = node
                     score += grid[node[0]][node[1]]
 
             except StopIteration:
@@ -178,52 +286,93 @@ while running:
         for y in range(COLS):
             rect = pygame.Rect(y*CELL_SIZE, x*CELL_SIZE, CELL_SIZE, CELL_SIZE)
             
-            val = grid[x][y]
             if grid[x][y] == 0:
                 #pygame.draw.rect(screen, (0,0,0), rect)
                 # affiche le sprite à la place du mur
-                screen.blit(sprite_eau, rect)
+                tl = ((1, 12), (0, 14), (2, 12), (1, 13))
+                bl = ((3, 12), (1, 11), (2, 12), (3, 13))
+                tr = ((1, 14), (0, 13), (2, 14), (1, 13))
+                br = ((3, 14), (2, 11), (2, 14), (3, 13))
+                tile = generate_tiles(x, y, (2, 13), tl, bl, tr, br)
+
             else:
+                val = grid[x][y]
                 terrain = next(t for t in terrains if t["cost"]==val)
                 b = brightness[(x,y)]
                 
-                screen.blit(terrain["sprite"], rect)
+                
+                
+                if val == 1:
+                    tl = ((5, 4), (4, 7), (6, 4), (5, 5))
+                    bl = ((7, 4), (5, 7), (6, 4), (7, 5))
+                    tr = ((5, 6), (3, 7), (6, 6), (5, 5))
+                    br = ((7, 6), (2, 7), (6, 6), (7, 5))
+                    tile = generate_tiles(x, y, (6, 5), tl, bl, tr, br)
+  
+                    
+                elif val == 3:
+                    tl = ((9, 4), (8, 5), (10, 4), (9, 5))
+                    bl = ((11, 4), (9, 7), (10, 4), (11, 5))
+                    tr = ((9, 6), (8, 6), (10, 6), (9, 5))
+                    br = ((11, 6), (8, 7), (10, 6), (11, 5))
+                    tile = generate_tiles(x, y, (10, 5), tl, bl, tr, br)
+
+                    
+                elif val == 5:
+                    tl = ((0, 8), (4, 9), (1, 8), (0, 9))
+                    bl = ((2, 8), (3, 9), (1, 8), (2, 9))
+                    tr = ((0, 10), (4, 9), (1, 10), (0, 9))
+                    br = ((2, 10), (3, 8), (1, 10), (2, 9))
+                    tile = generate_tiles(x, y, (1, 9), tl, bl, tr, br)
+
+                    
+            screen.blit(tile, rect)
 
 
-                # bordure fine
-                pygame.draw.rect(screen, (20,20,20), rect, 1)
+            if brightness[(x,y)] > 0:
+                overlay = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+                overlay.fill((255, 255, 255, 50))  # léger éclaircissement
+                screen.blit(overlay, rect)
 
-
-            if (x,y) in path_cells:
-                pygame.draw.rect(screen, (255,255,0), rect)
-                # contour lumineux léger
-                pygame.draw.rect(screen, (255,255,180), rect, 1)
+            if (x,y) in path_cells and (x, y) != start:
+                sprite_path = pygame.transform.rotate(way, 0)
+                if path_parent[(x, y)] == (x, y-1) :
+                    sprite_path = pygame.transform.rotate(way, 90)
+                elif path_parent[(x, y)] == (x-1, y) :
+                    sprite_path = pygame.transform.rotate(way, 0)
+                elif path_parent[(x, y)] == (x+1, y) :
+                    sprite_path = pygame.transform.rotate(way, 180)
+                elif path_parent[(x, y)] == (x, y+1) :
+                    sprite_path = pygame.transform.rotate(way, -90)
+                screen.blit(sprite_path, (rect.x, rect.y))
 
     # start / goal
     if start:
-        pygame.draw.rect(screen, (0,255,0),
-            (start[1]*CELL_SIZE, start[0]*CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        screen.blit(player_BFS,
+            (start[1]*CELL_SIZE, start[0]*CELL_SIZE))
 
     if goal:
-        pygame.draw.rect(screen, (255,0,0),
-            (goal[1]*CELL_SIZE, goal[0]*CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        screen.blit(castle,
+            (goal[1]*CELL_SIZE, goal[0]*CELL_SIZE))
 
     
     # ===== Panneau terrain =====
     for i, t in enumerate(terrains):
-        rect = pygame.Rect(10 + i*60, 10, 50, 30)
+        rect = pygame.Rect(10 + i*60, 10, 48, 48)
+        sprite_redim = pygame.transform.scale(t["sprite"], (48, 48))
+        screen.blit(sprite_redim, rect)
+
         
-        # si un sprite existe, on l'affiche
-        if t["sprite"] is not None:
-            sprite_redim = pygame.transform.scale(t["sprite"], (50, 30))
-            screen.blit(sprite_redim, rect)
-        else:
-            # fallback couleur
-            pygame.draw.rect(screen, t["color"], rect)
-        
-        # bordure si sélectionné
         if t == terrain_actif:
-            pygame.draw.rect(screen, (255,255,255), rect, 3)
+            # overlay blanc transparent
+            overlay = pygame.Surface((48, 48), pygame.SRCALPHA)
+            overlay.fill((255, 255, 255, 80))  # alpha = transparence
+            screen.blit(overlay, (rect.x, rect.y))
+    
+
+           
+        
+
             
     buttons = ["BFS", "DIJKSTRA", "ASTAR"]
 
@@ -240,6 +389,8 @@ while running:
 
         text = font.render(name, True, text_color)
         screen.blit(text, (rect.x + 10, rect.y + 5))
+        
+        
     # ===== TEXTE =====
     legend = [
         "Clic gauche = mur",
